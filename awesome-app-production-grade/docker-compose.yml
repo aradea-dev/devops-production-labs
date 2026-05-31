@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # TIER 1: FRONTEND (NGINX EDGE PROXY)
+  # ==========================================
+  web-proxy:
+    image: nginx:latest
+    container_name: production-edge-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Menggunakan konfigurasi pengerasan keamanan dari Hari 3 & 4
+      #- ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      #- ./nginx/certs:/home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:ro
+      # Hubungkan langsung ke file nginx.conf di folder lab hardening
+      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      
+      # Hubungkan langsung ke folder conf.d di folder lab hardening
+      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/conf.d:/etc/nginx/conf.d:ro
+      
+      # Hubungkan langsung ke folder certs (sertifikat mkcert) di folder lab hardening
+      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:/home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:ro
+    networks:
+      - frontend-net
+    depends_on:
+      - api-server
+    deploy:
+      resources:
+        limits:
+          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
+    restart: always
+
+  # ==========================================
+  # TIER 2: BACKEND (NODE.JS MOCK API)
+  # ==========================================
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: production-secured-api
+    ports:
+      - "8080:8080"
+    networks:
+      - frontend-net # Terhubung ke depan agar bisa dipanggil Nginx
+      - backend-net  # Terhubung ke belakang untuk ambil data ke DB
+    deploy:
+      resources:
+        limits:
+          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
+    restart: always
+
+  # ==========================================
+  # TIER 3: DATA (POSTGRESQL DATABASE)
+  # ==========================================
+  database:
+    image: postgres:15-alpine
+    container_name: production-isolated-db
+    environment:
+      POSTGRES_USER: devops_user
+      POSTGRES_PASSWORD: SuperSecurePassword123! # Gunakan env asli di produksi
+      POSTGRES_DB: production_db
+    networks:
+      - data-net # Terisolasi total di jaringan paling belakang
+    deploy:
+      resources:
+        limits:
+          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
+    restart: always
+
+# ==========================================
+# DEFINISI JARINGAN (BRIDGE TERISOLASI)
+# ==========================================
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  data-net:
+    driver: bridge
