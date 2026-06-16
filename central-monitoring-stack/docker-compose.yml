@@ -1,0 +1,75 @@
+# =========================================================================
+# DOCKER COMPOSE CONFIGURATION FOR LOKI & GRAFANA
+# =========================================================================
+
+version: '3.8' # Menentukan versi skema docker-compose yang digunakan
+
+networks:
+  monitoring-net:
+    name: central-monitoring-network # Memberikan nama spesifik pada network agar mudah diidentifikasi
+    driver: bridge                   # Menggunakan driver bridge standar agar container di dalamnya bisa saling berkomunikasi
+
+services:
+  # -----------------------------------------------------------------------
+  # SERVICE: Grafana Loki (Log Aggregator)
+  # -----------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.4          # Menggunakan Grafana Loki versi 2.9.4 resmi dari Docker Hub
+    container_name: monitoring-loki    # Menentukan nama container saat dijalankan agar tidak acak
+    volumes:
+      # Melakukan mounting file konfigurasi dari lokal host ke dalam container Loki
+      - ./config/loki-config.yaml:/etc/loki/loki-config.yaml
+    command: -config.file=/etc/loki/loki-config.yaml # Perintah untuk menjalankan Loki menggunakan file konfigurasi tersebut
+    ports:
+      - "3100:3100"                    # Mengekspos port 3100 (Host:Container) untuk API Loki dan pengiriman log
+    networks:
+      - monitoring-net                 # Menghubungkan Loki ke jaringan monitoring agar bisa diakses oleh Grafana
+    deploy:
+      resources:
+        limits:
+          memory: 150M                 # Membatasi penggunaan RAM maksimal container Loki sebesar 150 Megabytes
+    logging:
+      driver: "json-file"              # Menggunakan driver standar json untuk log internal container Loki sendiri
+      options:
+        max-size: "10m"                # Ukuran maksimal satu file log container adalah 10 Megabytes
+        max-file: "3"                  # Mempertahankan maksimal 3 file log terlama sebelum ditimpa (log rotation)
+
+  # -----------------------------------------------------------------------
+  # SERVICE: Grafana (Visualization Dashboard)
+  # -----------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.3      # Menggunakan Grafana versi 10.2.3 resmi
+    container_name: monitoring-grafana # Menentukan nama container Grafana
+    ports:
+      # Dipetakan ke port 3001 di localhost agar tidak tabrakan dengan port bawaan aplikasi lain (3000)
+      - "3001:3000" 
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=devops-superstar # Mengatur password default akun 'admin' saat pertama kali login
+    networks:
+      - monitoring-net                 # Menghubungkan Grafana ke jaringan yang sama dengan Loki
+    deploy:
+      resources:
+        limits:
+          memory: 200M                 # Membatasi penggunaan RAM maksimal container Grafana sebesar 200 Megabytes
+    logging:
+      driver: "json-file"              # Menggunakan driver json untuk log internal Grafana
+      options:
+        max-size: "10m"                # Ukuran maksimal satu file log container adalah 10 Megabytes
+        max-file: "3"                  # Mempertahankan maksimal 3 file log terlama (log rotation)
+  
+  # =======================================================================
+  # SERVICE: Promtail (Pengumpul Log Kontainer Docker)
+  # =======================================================================
+  promtail:
+    image: grafana/promtail:latest # 🔥 UBAH DARI 2.9.4 MENJADI latest
+    container_name: monitoring-promtail
+    user: "root"
+    volumes:
+      - ./config/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    networks:
+      - monitoring-net
+    depends_on:
+      - loki

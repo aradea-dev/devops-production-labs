@@ -1,1 +1,1 @@
-nginx/certs/*-key.pem
+**/nginx/certs/

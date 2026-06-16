@@ -1,0 +1,27 @@
+# =========================================================================
+# KONFIGURASI GRAFANA PROMTAIL (PENGUMPUL LOG)
+# =========================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+# Posisi pencatatan terakhir baris log yang dibaca agar tidak dibaca ulang saat restart
+positions:
+  filename: /tmp/positions.yaml
+
+# Ke mana Promtail harus mengirimkan log yang berhasil dikumpulkan
+clients:
+  - url: http://monitoring-loki:3100/loki/api/v1/push
+
+# Strategi pengumpulan log (Scrape Config)
+scrape_configs:
+  - job_name: docker_containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock # Membaca langsung dari socket Docker Host
+        refresh_interval: 5s
+    relabel_configs:
+      # Mengubah nama kontainer Docker menjadi label di Loki agar mudah dicari
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'

@@ -1,1 +1,8 @@
+# ==============================================================================
+# SISTEM MONITORING OTOMATIS
+# Deskripsi : Menjalankan script pengerasan infrastruktur lokal (sys-monitor.sh)
+#             setiap satu menit sekali secara terus-menerus.
+# Output    : Log aktivitas dan error akan disimpan di /home/aradea/sys-monitor.log
+# ==============================================================================
+
 * * * * * /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/scripts/sys-monitor.sh >> /home/aradea/sys-monitor.log 2>&1

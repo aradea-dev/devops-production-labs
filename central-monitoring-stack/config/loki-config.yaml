@@ -1,0 +1,44 @@
+# =========================================================================
+# KONFIGURASI GRAFANA LOKI
+# =========================================================================
+
+# Menonaktifkan autentikasi multi-tenant. 
+# Jika 'false', Loki akan berjalan dalam mode single-tenant (tidak butuh header X-Scope-OrgID).
+auth_enabled: false
+
+# Konfigurasi protokol dan port jaringan untuk server Loki
+server:
+  http_listen_port: 3100  # Port untuk HTTP API (digunakan oleh Grafana untuk query dan Promtail untuk mengirim log)
+  grpc_listen_port: 9096  # Port untuk komunikasi gRPC internal antar komponen Loki
+
+# Konfigurasi umum (common) untuk menyederhanakan pengaturan storage dan ring
+common:
+  path_prefix: /tmp/loki  # Direktori dasar yang digunakan Loki untuk menyimpan data lokal (index & chunks)
+  
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks  # Lokasi penyimpanan log data asli (chunks) di lokal disk
+      rules_directory: /tmp/loki/rules    # Lokasi penyimpanan file aturan (alerting/recording rules)
+  
+  replication_factor: 1  # Jumlah replikasi data. Angka '1' cocok untuk mode single-node (bukan cluster)
+  
+  ring:
+    kvstore:
+      store: inmemory  # Menggunakan memori RAM untuk menyimpan status cluster (Key-Value store), ideal untuk single-node
+
+# Konfigurasi Skema Data (Kapan dan bagaimana data indeks disimpan)
+schema_config:
+  configs:
+    - from: 2020-10-24           # Tanggal mulai berlakunya aturan konfigurasi ini
+      store: boltdb-shipper      # Jenis database yang digunakan untuk indeks (boltdb-shipper direkomendasikan untuk lokal)
+      object_store: filesystem   # Tempat penyimpanan objek data (dalam hal ini disimpan di local filesystem)
+      schema: v11                # Versi skema internal Loki yang digunakan
+      index:
+        prefix: index_           # Awalan nama (prefix) untuk tabel-tabel indeks yang dibuat
+        period: 24h              # Rentang waktu per tabel indeks. Data indeks dipecah per 24 jam (harian)
+
+# Batasan (Limits) dan Kebijakan Manajemen Log
+limits_config:
+  reject_old_samples: true          # Menolak log masuk (ingestion) jika tanggal/timestamp-nya terlalu lama
+  reject_old_samples_max_age: 168h  # Batas maksimal umur log yang diterima. Log yang lebih tua dari 168 jam (7 hari) akan ditolak
+  creation_grace_period: 10m        # Periode toleransi (10 menit) untuk menerima log dengan timestamp yang sedikit berada di masa depan

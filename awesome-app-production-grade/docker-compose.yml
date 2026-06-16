@@ -1,83 +1,78 @@
-version: '3.8'
-
 services:
   # ==========================================
-  # TIER 1: FRONTEND (NGINX EDGE PROXY)
+  # 1. FRONTEND SERVICE (Nginx Reverse Proxy)
   # ==========================================
-  web-proxy:
-    image: nginx:latest
-    container_name: production-edge-proxy
+  frontend:
+    image: nginx:alpine
+    container_name: frontend-app
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # Menggunakan konfigurasi pengerasan keamanan dari Hari 3 & 4
-      #- ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-      #- ./nginx/certs:/home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:ro
-      # Hubungkan langsung ke file nginx.conf di folder lab hardening
-      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      
-      # Hubungkan langsung ke folder conf.d di folder lab hardening
-      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/conf.d:/etc/nginx/conf.d:ro
-      
-      # Hubungkan langsung ke folder certs (sertifikat mkcert) di folder lab hardening
-      #- /home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:/home/aradea/dev/devops-production-labs/local-infrastructure-hardening/nginx/certs:ro
+      - "8080:80"
+    # HANYA terhubung ke jaringan frontend
     networks:
       - frontend-net
     depends_on:
-      - api-server
+      backend:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
-    restart: always
+          cpus: '0.25'      # Batasi maksimal 25% dari 1 Core CPU
+          memory: 128M      # Batasi maksimal 128MB RAM
+    restart: unless-stopped
 
   # ==========================================
-  # TIER 2: BACKEND (NODE.JS MOCK API)
+  # 2. BACKEND SERVICE (Secure Node.js API)
   # ==========================================
-  api-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: production-secured-api
+  backend:
+    build: .
+    image: awesome-backend:production
+    container_name: backend-api
     ports:
-      - "8080:8080"
+      - "3000:3000"
+    # TERBUNGKUS DI DUA JARINGAN: jembatan ke frontend dan jembatan ke database
     networks:
-      - frontend-net # Terhubung ke depan agar bisa dipanggil Nginx
-      - backend-net  # Terhubung ke belakang untuk ambil data ke DB
+      - frontend-net
+      - backend-net
     deploy:
       resources:
         limits:
-          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
-    restart: always
+          cpus: '0.50'      # Batasi maksimal 50% dari 1 Core CPU (Aplikasi inti)
+          memory: 256M      # Batasi maksimal 256MB RAM
+    # Strategi Self-Healing (Menggunakan IP internal 127.0.0.1)
+    healthcheck:
+      test: ["CMD", "/nodejs/bin/node", "-e", "require('http').get('http://127.0.0.1:3000/api/v1/mock', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); })"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
 
   # ==========================================
-  # TIER 3: DATA (POSTGRESQL DATABASE)
+  # 3. DATABASE SERVICE (Redis Cache Storage)
   # ==========================================
   database:
-    image: postgres:15-alpine
-    container_name: production-isolated-db
-    environment:
-      POSTGRES_USER: devops_user
-      POSTGRES_PASSWORD: SuperSecurePassword123! # Gunakan env asli di produksi
-      POSTGRES_DB: production_db
+    image: redis:alpine
+    container_name: database-storage
+    # HANYA terhubung ke data-net (Terisolasi total dari internet & frontend)
     networks:
-      - data-net # Terisolasi total di jaringan paling belakang
+      - data-net
     deploy:
       resources:
         limits:
-          memory: 256M # HARDENING: Batasi RAM maksimal 256 Megabytes
-    restart: always
+          cpus: '0.25'      # Batasi maksimal 25% dari 1 Core CPU
+          memory: 128M      # Batasi maksimal 128MB RAM
+    restart: unless-stopped
 
 # ==========================================
-# DEFINISI JARINGAN (BRIDGE TERISOLASI)
+# DEFINISI 3 NETWORK BRIDGE TERISOLASI
 # ==========================================
 networks:
   frontend-net:
     driver: bridge
+    name: net_frontend_tier
   backend-net:
     driver: bridge
+    name: net_backend_tier
   data-net:
     driver: bridge
+    name: net_data_tier

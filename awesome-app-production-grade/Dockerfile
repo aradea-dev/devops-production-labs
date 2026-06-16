@@ -1,36 +1,29 @@
 # ==========================================
-# STAGE 1: Build & Install Dependencies
+# STAGE 1: Build Stage (Menggunakan Node Alpine)
 # ==========================================
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy package.json untuk install dependensi
-COPY src/package.json ./
-RUN npm install
+# Salin manifes dependensi dari sub-folder src lokal
+COPY src/package*.json ./
 
-# Copy source code aplikasi
-COPY src/ ./
+# UBAH BARIS INI: Menggunakan npm install agar dependensi Express terurai otomatis
+RUN npm install --omit=dev
 
 # ==========================================
-# STAGE 2: Production Environment (Final Image)
+# STAGE 2: Runtime Stage (Google Distroless Securing)
 # ==========================================
-FROM node:20-alpine
+FROM gcr.io/distroless/nodejs20-debian12:20260501
 WORKDIR /app
 
-# Menyalin hanya file yang dibutuhkan dari Stage 1 (builder)
-COPY --from=builder /app/package.json ./package.json
+# Salin folder node_modules yang sudah matang dari stage builder
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/server.js ./server.js
 
-# HARDENING: Membuat user non-root dan memberikan hak akses folder /app
-RUN addgroup -S devopsgroup && adduser -S alpine -G devopsgroup \
-    && chown -R alpine:devopsgroup /app
+# Salin kode aplikasi utama dari folder src lokal ke container
+COPY src/ .
 
-# Pindah dari user root ke user non-root 'alpine'
-USER alpine
+# Jalankan container dengan user non-root bawaan distroless
+USER nonroot
 
-# Expose port aplikasi
-EXPOSE 8080
-
-# Jalankan aplikasi
-CMD ["npm", "start"]
+EXPOSE 3000
+CMD ["app.js"]
