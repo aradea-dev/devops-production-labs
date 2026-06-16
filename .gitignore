@@ -1,0 +1,8 @@
+# Mengunci folder certs di semua sub-directory
+local-infrastructure-hardening/nginx/certs/
+awesome-app-production-grade/nginx/certs/
+
+# Opsional: Jika ada file environment/secret di masa depan
+.env
+*.pem
+*.key

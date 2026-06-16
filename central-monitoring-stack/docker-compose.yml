@@ -44,7 +44,7 @@ services:
       # Dipetakan ke port 3001 di localhost agar tidak tabrakan dengan port bawaan aplikasi lain (3000)
       - "3001:3000" 
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=devops-superstar # Mengatur password default akun 'admin' saat pertama kali login
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD} # Mengatur password default akun 'admin' saat pertama kali login
     networks:
       - monitoring-net                 # Menghubungkan Grafana ke jaringan yang sama dengan Loki
     deploy:
